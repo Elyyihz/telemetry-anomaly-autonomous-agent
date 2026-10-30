@@ -1,0 +1,51 @@
+services:
+  agent-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telemetry-anomaly-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=telemetry-anomaly-autonomous-agent
+      - PROMETHEUS_URL=http://prometheus:9090
+      - JAEGER_QUERY_URL=http://jaeger:16686
+      - LLAMA_CPP_MODEL_PATH=/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+    depends_on:
+      - prometheus
+      - jaeger
+      - otel-collector
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: telemetry-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: telemetry-jaeger
+    ports:
+      - "16686:16686"
+      - "4317"
+      - "4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: telemetry-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - jaeger
+    restart: unless-stopped
