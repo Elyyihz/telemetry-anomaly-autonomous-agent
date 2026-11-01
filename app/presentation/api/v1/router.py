@@ -5,6 +5,7 @@ from app.infrastructure.gateway.prometheus_client_impl import PrometheusGatewayI
 from app.infrastructure.gateway.jaeger_trace_client_impl import JaegerGatewayImpl
 from app.infrastructure.gateway.llama_cpp_client_impl import LlamaCppGatewayImpl
 from app.infrastructure.gateway.incident_notifier_impl import IncidentNotifierGatewayImpl
+from app.infrastructure.gateway.webhook_remediation_impl import WebhookRemediationGatewayImpl
 from app.core.usecase.anomaly_agent.nodes import TelemetryAgentNodes
 from app.core.usecase.anomaly_agent.graph import TelemetryAgentGraphUseCase
 from app.core.usecase.diagnose_infrastructure_usecase import DiagnoseInfrastructureUseCase
@@ -18,11 +19,13 @@ def get_telemetry_controller() -> TelemetryController:
     jaeger_gw = JaegerGatewayImpl()
     llm_gw = LlamaCppGatewayImpl()
     notifier_gw = IncidentNotifierGatewayImpl()
+    remediation_gw = WebhookRemediationGatewayImpl()
 
     nodes = TelemetryAgentNodes(
         prometheus_gateway=prom_gw,
         jaeger_gateway=jaeger_gw,
         local_llm_gateway=llm_gw,
+        remediation_gateway=remediation_gw,
     )
     graph_uc = TelemetryAgentGraphUseCase(nodes)
     diag_uc = DiagnoseInfrastructureUseCase(graph_uc, notifier_gw)

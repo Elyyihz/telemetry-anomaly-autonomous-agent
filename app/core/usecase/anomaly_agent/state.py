@@ -26,4 +26,5 @@ class TelemetryAgentState(TypedDict):
     diagnosis: Optional[Dict[str, Any]]
     severity: str
     logs: List[str]
+    remediation_result: Optional[Dict[str, Any]]
     error: Optional[str]

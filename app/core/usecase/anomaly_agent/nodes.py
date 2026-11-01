@@ -1,8 +1,9 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.core.domain.gateway.prometheus_gateway import PrometheusGateway
 from app.core.domain.gateway.jaeger_gateway import JaegerGateway
 from app.core.domain.gateway.local_llm_gateway import LocalLlmGateway
+from app.core.domain.gateway.remediation_gateway import RemediationGateway
 from app.core.domain.models.telemetry import MetricSample, TraceSpan, MetricType
 from app.core.domain.enum.anomaly_severity import AnomalySeverity
 from app.core.usecase.anomaly_agent.state import TelemetryAgentState
@@ -18,6 +19,7 @@ class TelemetryAgentNodes:
         prometheus_gateway: PrometheusGateway,
         jaeger_gateway: JaegerGateway,
         local_llm_gateway: LocalLlmGateway,
+        remediation_gateway: Optional[RemediationGateway] = None,
     ):
         """Initializes nodes with telemetry and LLM dependencies.
 
@@ -25,10 +27,12 @@ class TelemetryAgentNodes:
             prometheus_gateway: Prometheus adapter.
             jaeger_gateway: Jaeger tracing adapter.
             local_llm_gateway: llama.cpp adapter.
+            remediation_gateway: Optional self-healing remediation adapter.
         """
         self.prometheus_gateway = prometheus_gateway
         self.jaeger_gateway = jaeger_gateway
         self.local_llm_gateway = local_llm_gateway
+        self.remediation_gateway = remediation_gateway
 
     async def node_fetch_metrics(self, state: TelemetryAgentState) -> Dict[str, Any]:
         """Queries Prometheus for time-series metrics over observation window.
@@ -215,4 +219,40 @@ class TelemetryAgentNodes:
         return {
             "diagnosis": diagnosis_data,
             "logs": state["logs"] + [f"Diagnosis synthesized: {diagnosis.root_cause_summary[:60]}..."],
+        }
+
+    async def node_auto_remediate(self, state: TelemetryAgentState) -> Dict[str, Any]:
+        """Dispatches self-healing remediation actions if prescribed by the diagnosis.
+
+        Args:
+            state: Current agent state.
+
+        Returns:
+            Updated state with remediation outcome.
+        """
+        diag = state.get("diagnosis")
+        remediation_action = diag.get("auto_remediation_suggested") if diag else None
+
+        if not remediation_action or not self.remediation_gateway:
+            logger.info("Decision taken: No automated remediation needed or gateway unavailable")
+            return {
+                "remediation_result": None,
+                "logs": state["logs"] + ["No automated remediation performed"],
+            }
+
+        logger.info("Step started: Executing self-healing action '%s'", remediation_action)
+        outcome = await self.remediation_gateway.execute_remediation(
+            action=remediation_action,
+            service_name=state["service_name"],
+            parameters={"diagnosis_id": diag.get("diagnosis_id")},
+        )
+        logger.info(
+            "Step concluded: Self-healing action '%s' completed with status=%s",
+            remediation_action,
+            outcome.get("status"),
+        )
+
+        return {
+            "remediation_result": outcome,
+            "logs": state["logs"] + [f"Self-healing applied: {remediation_action}"],
         }
